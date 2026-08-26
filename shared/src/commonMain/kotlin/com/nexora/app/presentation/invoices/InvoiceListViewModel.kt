@@ -28,6 +28,7 @@ data class InvoiceListUiState(
 
     val totalAmount: Double
         get() = invoices.sumOf { it.grandAmt }
+
 }
 
 class InvoiceListViewModel : ViewModel() {
@@ -119,7 +120,9 @@ class InvoiceListViewModel : ViewModel() {
                 invoice.createdDate,
                 invoice.description,
                 invoice.grandAmt,
-                invoice.subTotalAmt
+                invoice.subTotalAmt,
+                invoice.totalOrderLiDiscAmt
+
             )
                 .joinToString(" ")
                 .lowercase()

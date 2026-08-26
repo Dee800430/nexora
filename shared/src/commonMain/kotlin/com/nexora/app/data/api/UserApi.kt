@@ -4,7 +4,9 @@ import com.nexora.app.core.network.ApiService
 import com.nexora.app.data.model.user.CustomerRecord
 import com.nexora.app.data.model.user.LoginRequest
 import com.nexora.app.data.model.user.LoginResponse
+import com.nexora.app.data.model.user.MobileLoginRequest
 import com.nexora.app.data.model.user.Roles
+import com.nexora.app.data.model.user.SendOtpRequest
 import com.nexora.app.data.model.user.TempCustomerRequest
 import com.nexora.app.data.model.user.UserAddress
 import com.nexora.app.data.model.user.UserProfile
@@ -415,6 +417,23 @@ object UserApi {
             endpoint = "/user/customer/temp/$userId",
             method = "PUT",
             body = body
+        )
+    }
+    suspend fun sendOtp(request: SendOtpRequest): String {
+        return ApiService.request<String, SendOtpRequest>(
+            service = "user",
+            endpoint = "/auth/mobile/send-otp",
+            method = "POST",
+            body = request
+        )
+    }
+
+    suspend fun loginWithOtp(request: MobileLoginRequest): LoginResponse {
+        return ApiService.request<LoginResponse, MobileLoginRequest>(
+            service = "user",
+            endpoint = "/auth/login/mobile",
+            method = "POST",
+            body = request
         )
     }
 

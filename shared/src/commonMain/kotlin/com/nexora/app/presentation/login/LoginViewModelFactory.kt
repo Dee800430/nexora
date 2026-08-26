@@ -1,8 +1,11 @@
+// LoginViewModelFactory.kt
 package com.nexora.app.presentation.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.nexora.app.data.repository.UserRepository
+import kotlin.reflect.KClass
 
 class LoginViewModelFactory(
     private val userRepository: UserRepository
@@ -10,15 +13,15 @@ class LoginViewModelFactory(
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(
-        modelClass: Class<T>
+        modelClass: KClass<T>,
+        extras: CreationExtras
     ): T {
-
-        if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
+        if (modelClass == LoginViewModel::class) {
             return LoginViewModel(userRepository) as T
         }
 
         throw IllegalArgumentException(
-            "Unknown ViewModel class: ${modelClass.name}"
+            "Unknown ViewModel class: ${modelClass.simpleName}"
         )
     }
 }

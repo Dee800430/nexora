@@ -7,6 +7,16 @@ data class Roles(
     val roleId: Long,
     val roleName: String
 )
+@Serializable
+data class SendOtpRequest(
+    val mobile: String
+)
+
+@Serializable
+data class MobileLoginRequest(
+    val mobile: String,
+    val otp: String
+)
 
 @Serializable
 data class UserLines(

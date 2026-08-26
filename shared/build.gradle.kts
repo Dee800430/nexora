@@ -51,6 +51,7 @@ kotlin {
             implementation(libs.coil.network.okhttp)
         }
 
+
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)

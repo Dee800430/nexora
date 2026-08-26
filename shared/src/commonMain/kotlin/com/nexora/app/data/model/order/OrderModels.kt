@@ -36,7 +36,7 @@ data class Order(
     val sellerId: Long = 0,
     val subTotalAmt: Double = 0.0,
     val totalAmt: Double? = null,
-    val totalDiscAmt: Double? = null,
+    val totalOrderLiDiscAmt: Double? = null,
     val discountAmt: Double? = null,
     val discount: Double? = null,
     val totalTaxAmt: Double? = null,
@@ -168,4 +168,27 @@ data class InvoiceResponse(
     val tax: Double,
     val discount: Double,
     val grandTotal: Double
+)
+
+enum class DiscountType {
+    PERCENTAGE,
+    FIXED
+}
+@Serializable
+data class ApplyDiscountRequest(
+    val orderLineItemId: Long? = null,
+    val orderId: Long? = null,
+    val discountType: String, // "PERCENTAGE" or "FIXED"
+    val discountValue: Double,
+    val applyToAllItems: Boolean = false
+)
+
+@Serializable
+data class DiscountResult(
+    val success: Boolean = true,
+    val message: String? = null,
+    val orderLineItemId: Long? = null,
+    val orderId: Long? = null,
+    val discountAmt: Double = 0.0,
+    val newTotal: Double = 0.0
 )

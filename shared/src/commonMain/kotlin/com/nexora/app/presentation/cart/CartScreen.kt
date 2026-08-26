@@ -18,7 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Discount
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -34,6 +36,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexora.app.presentation.components.CartItemRow
 import com.nexora.app.presentation.components.CustomerDialog
+import com.nexora.app.presentation.components.DiscountDialog
 import com.nexora.app.util.formatPrice
 import kotlinx.coroutines.launch
 
@@ -61,6 +65,8 @@ fun CartScreen(
     onOrderComplete: () -> Unit
 ) {
     var showCustomerDialog by remember { mutableStateOf(false) }
+    var showOrderDiscountDialog by remember { mutableStateOf(false) }
+
     var customerDetails by remember {
         mutableStateOf<CustomerDetails?>(null)
     }
@@ -104,6 +110,34 @@ fun CartScreen(
                             contentDescription = "Back"
                         )
                     }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {showOrderDiscountDialog= true},
+                        enabled =  !CartStore.isDiscountLoading && backendItems.isNotEmpty()
+                    ){
+                        Icon(
+                            Icons.Default.Discount,
+                            contentDescription = "Order Discount",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (CartStore.hasOrderDiscount()) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    CartStore.removeAllOrderDiscounts()
+                                }
+                            },
+                            enabled = !CartStore.isDiscountLoading
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove all discounts",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -124,6 +158,51 @@ fun CartScreen(
                 .background(Color(0xFFF4F6F8)),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            CartStore.discountMessage?.let { message ->
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (message.contains("success", ignoreCase = true)) {
+                                Color(0xFFE8F5E9)
+                            } else {
+                                Color(0xFFFFEBEE)
+                            }
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = message,
+                                color = if (message.contains("success", ignoreCase = true)) {
+                                    Color(0xFF2E7D32)
+                                } else {
+                                    Color(0xFFC62828)
+                                },
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { CartStore.discountMessage = null },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Dismiss",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             CartStore.message?.let { message ->
                 item {
                     Text(
@@ -141,37 +220,59 @@ fun CartScreen(
                 }
             }
 
-            item {
-                CustomerSummaryCard(
-                    customer = customerDetails,
-                    onChange = { showCustomerDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                )
-            }
 
             if (backendItems.isNotEmpty()) {
                 items(
                     items = backendItems,
                     key = { item -> item.orderLineItemId }
                 ) { item ->
+
                     CartItemRow(
                         item = item,
-                        onTempQtyChange = { _, _ -> },
-                        onApplyQty = { id, qty ->
-                            CartStore.updateBackendQuantity(
-                                orderLineItemId = id.toLong(),
-                                quantity = qty.toDouble()
-                            )
+
+                        onIncrease = {
+                            scope.launch {
+                                CartStore.increaseCartQty(
+                                    item.orderLineItemId
+                                )
+                            }
                         },
+
+                        onDecrease = {
+                            scope.launch {
+                                CartStore.decreaseCartQty(
+                                    item.orderLineItemId
+                                )
+                            }
+                        },
+
                         onRemove = {
-                            CartStore.removeBackendItem(item)
+                            scope.launch {
+                                CartStore.removeBackendItem(item)
+                            }
                         },
+                        onApplyDiscount = { orderLineItemId, discountType, value ->
+                            scope.launch {
+                                CartStore.applyItemDiscount(
+                                    orderLineItemId = orderLineItemId,
+                                    discountType = discountType,
+                                    discountValue = value
+                                )
+                            }
+                        },
+                        onRemoveDiscount = { orderLineItemId ->
+                            scope.launch {
+                                CartStore.removeItemDiscount(orderLineItemId)
+                            }
+                        },
+
+                        disabled = CartStore.isSyncing,
+
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
                 }
-            } else {
+            }
+            else {
                 items(
                     items = cart,
                     key = { line -> line.id }
@@ -187,71 +288,121 @@ fun CartScreen(
             }
 
             item {
+
                 CheckoutSummary(
                     subTotal = if (backendCart != null) CartStore.backendSubTotal else CartStore.subTotal,
                     discount = if (backendCart != null) CartStore.backendDiscount else 0.0,
                     tax = if (backendCart != null) CartStore.backendTax else CartStore.tax,
                     grandTotal = if (backendCart != null) CartStore.backendGrandTotal else CartStore.grandTotal,
                     onClear = {
-                        scope.launch {
-                            CartStore.clearBackendCart()
-                        }
+                        scope.launch { CartStore.clearBackendCart() }
                     },
                     onComplete = {
                         showCustomerDialog = true
                     },
+                    onRemoveAllDiscounts = {
+                        scope.launch { CartStore.removeAllOrderDiscounts() }
+                    },
+                    hasDiscount = CartStore.hasOrderDiscount(),
+                    isDiscountLoading = CartStore.isDiscountLoading,
                     modifier = Modifier.padding(12.dp)
+
                 )
             }
         }
     }
+    DiscountDialog(
+        open = showOrderDiscountDialog,
+        onClose = { showOrderDiscountDialog = false },
+        onApply = { discountType, value, applyToAllItems ->
+            scope.launch {
+                CartStore.applyOrderDiscount(
+                    discountType = discountType,
+                    discountValue = value,
+                    applyToAllItems = applyToAllItems
+                )
+            }
+            showOrderDiscountDialog = false
+        },
+        type = "PERCENTAGE",
+        currentDiscount = CartStore.getOrderDiscountAmount(),
+        isOrderDiscount = true,
+        isLoading = CartStore.isDiscountLoading
+    )
 }
 
 @Composable
-private fun CustomerSummaryCard(
-    customer: CustomerDetails?,
-    onChange: () -> Unit,
+private fun CheckoutSummary(
+    subTotal: Double,
+    discount: Double,
+    tax: Double,
+    grandTotal: Double,
+    onClear: () -> Unit,
+    onComplete: () -> Unit,
+    onRemoveAllDiscounts: () -> Unit,
+    hasDiscount: Boolean,
+    isDiscountLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = customer?.name ?: "Customer not selected",
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    text = customer?.mobile ?: "Mobile, address and email will be added at checkout",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                customer?.address
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            SummaryRow("Total Product Price", subTotal)
+
+            // NEW: Show discount row if discount exists
+            if (discount > 0) {
+                SummaryRow("Discount", -discount, highlight = true)
             }
 
-            OutlinedButton(onClick = onChange) {
-                Text(if (customer == null) "Add" else "Change")
+            SummaryRow("Product Tax", tax)
+            Divider()
+            SummaryRow("Grand Total", grandTotal, true)
+
+            // NEW: Remove all discounts button
+            if (hasDiscount) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(
+                        onClick = onRemoveAllDiscounts,
+                        enabled = !isDiscountLoading
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Remove All Discounts")
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onClear,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Clear")
+                }
+                Button(
+                    onClick = onComplete,
+                    modifier = Modifier.weight(1.4f)
+                ) {
+                    Icon(Icons.Default.ReceiptLong, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Proceed to Complete")
+                }
             }
         }
     }
@@ -378,6 +529,41 @@ private fun CartLineCard(
         }
     }
 }
+@Composable
+private fun SummaryRow(
+    label: String,
+    amount: Double,
+    important: Boolean = false,
+    highlight: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            fontWeight = when {
+                important -> FontWeight.ExtraBold
+                highlight -> FontWeight.SemiBold
+                else -> FontWeight.Medium
+            },
+            color = when {
+                highlight && amount < 0 -> MaterialTheme.colorScheme.error
+                else -> Color.Unspecified
+            }
+        )
+        Text(
+            text = formatPrice(amount, "₹ "),
+            fontWeight = if (important) FontWeight.ExtraBold else FontWeight.Bold,
+            color = when {
+                important -> MaterialTheme.colorScheme.primary
+                highlight && amount < 0 -> MaterialTheme.colorScheme.error
+                else -> Color.Unspecified
+            }
+        )
+    }
+}
+
 
 @Composable
 private fun CheckoutSummary(
@@ -430,24 +616,3 @@ private fun CheckoutSummary(
     }
 }
 
-@Composable
-private fun SummaryRow(
-    label: String,
-    amount: Double,
-    important: Boolean = false
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            fontWeight = if (important) FontWeight.ExtraBold else FontWeight.Medium
-        )
-        Text(
-            text = formatPrice(amount, "Rs. "),
-            fontWeight = if (important) FontWeight.ExtraBold else FontWeight.Bold,
-            color = if (important) MaterialTheme.colorScheme.primary else Color.Unspecified
-        )
-    }
-}

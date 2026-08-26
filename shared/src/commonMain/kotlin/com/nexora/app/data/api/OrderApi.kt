@@ -1,7 +1,9 @@
 package com.nexora.app.data.api
 
 import com.nexora.app.core.network.ApiService
+import com.nexora.app.data.model.order.ApplyDiscountRequest
 import com.nexora.app.data.model.order.CreateInvoiceRequest
+import com.nexora.app.data.model.order.DiscountResult
 import com.nexora.app.data.model.order.InvoiceResponse
 import com.nexora.app.data.model.order.Order
 import com.nexora.app.data.model.order.OrderRequest
@@ -97,6 +99,18 @@ object OrderApi {
             endpoint =
                 "/inv/update-qty/$orderLineItemId" +
                         "?quantity=$quantity",
+            method = "POST"
+        )
+    }
+
+    suspend fun  reduceQty(
+        orderLineItemId: Long,
+        quantity: Double
+    ): Order {
+        return ApiService.request(
+            service = "order",
+            endpoint = "/inv/reduce-qty/$orderLineItemId" +
+                     "?quantity=$quantity ",
             method = "POST"
         )
     }
@@ -379,6 +393,56 @@ object OrderApi {
             endpoint = "/inv/order/create",
             method = "POST",
             body = request
+        )
+    }
+    suspend fun applyItemDiscount(
+        request: ApplyDiscountRequest
+    ): DiscountResult {
+        return ApiService.request(
+            service = "order",
+            endpoint = "/api/discount/item",
+            method = "POST",
+            body = request
+        )
+    }
+
+    /**
+     * Remove discount from an item
+     */
+    suspend fun removeItemDiscount(
+        orderLineItemId: Long
+    ): DiscountResult {
+        return ApiService.request(
+            service = "order",
+            endpoint = "/api/discount/item/$orderLineItemId",
+            method = "DELETE"
+        )
+    }
+
+    /**
+     * Apply discount to an order
+     */
+    suspend fun applyOrderDiscount(
+        request: ApplyDiscountRequest
+    ): DiscountResult {
+        return ApiService.request(
+            service = "order",
+            endpoint = "/api/discount/order",
+            method = "POST",
+            body = request
+        )
+    }
+
+    /**
+     * Remove all discounts from an order
+     */
+    suspend fun removeAllOrderDiscounts(
+        orderId: Long
+    ): DiscountResult {
+        return ApiService.request(
+            service = "order",
+            endpoint = "/api/discount/order/$orderId",
+            method = "DELETE"
         )
     }
 }

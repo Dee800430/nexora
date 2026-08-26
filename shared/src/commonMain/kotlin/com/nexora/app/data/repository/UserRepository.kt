@@ -4,7 +4,9 @@ import com.nexora.app.data.api.UserApi
 import com.nexora.app.data.model.user.CustomerRecord
 import com.nexora.app.data.model.user.LoginRequest
 import com.nexora.app.data.model.user.LoginResponse
+import com.nexora.app.data.model.user.MobileLoginRequest
 import com.nexora.app.data.model.user.Roles
+import com.nexora.app.data.model.user.SendOtpRequest
 import com.nexora.app.data.model.user.TempCustomerRequest
 import com.nexora.app.data.model.user.UserAddress
 import com.nexora.app.data.model.user.UserProfile
@@ -277,5 +279,17 @@ class UserRepository {
             userId = userId,
             body = body
         )
+    }
+    suspend fun sendOtp(mobile: String): String {
+        val request = SendOtpRequest(mobile = mobile)
+        return UserApi.sendOtp(request)
+    }
+
+    suspend fun loginWithOtp(mobile: String, otp: String): LoginResponse {
+        val request = MobileLoginRequest(
+            mobile = mobile,
+            otp = otp
+        )
+        return UserApi.loginWithOtp(request)
     }
 }

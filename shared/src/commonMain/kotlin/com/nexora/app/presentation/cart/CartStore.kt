@@ -3,11 +3,13 @@ package com.nexora.app.presentation.cart
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nexora.app.data.model.item.ItemDto
 import com.nexora.app.data.model.order.Order
 import com.nexora.app.data.model.order.OrderRequest
 import com.nexora.app.data.model.order.PlaceOrderRequest
+import com.nexora.app.data.repository.DiscountRepository
 import com.nexora.app.data.repository.OrderRepository
 import com.nexora.app.data.repository.UserRepository
 import kotlin.math.round
@@ -51,14 +53,23 @@ object CartStore {
     private val userRepository = UserRepository()
     private val cartLines = mutableStateListOf<CartLine>()
     private val invoiceLines = mutableStateListOf<ShopInvoice>()
+    private val discountRepository = DiscountRepository()
     private var invoiceCounter = 1001
+
+
+    // Discount state
+    var isDiscountLoading by mutableStateOf(false)
+        private set
+
+    var discountMessage by mutableStateOf<String?>(null)
+
     var activeBuyerId by mutableStateOf<Long?>(null)
         private set
 
     var backendCart by mutableStateOf<Order?>(null)
         private set
 
-    var isBusy by mutableStateOf(false)
+    var isSyncing by mutableStateOf(false)
         private set
 
     var message by mutableStateOf<String?>(null)
@@ -103,7 +114,7 @@ object CartStore {
 
     val backendDiscount: Double
         get() = backendCart?.let { cart ->
-            cart.totalDiscAmt ?: cart.discountAmt ?: cart.discount ?: 0.0
+            cart.totalOrderLiDiscAmt ?: cart.discountAmt ?: cart.discount ?: 0.0
         } ?: 0.0
 
     val backendTax: Double
@@ -139,7 +150,7 @@ object CartStore {
         message = null
     }
     suspend fun addToBackendCart(product: ItemDto): Boolean {
-        isBusy = true
+        isSyncing = true
         message = null
 
         try {
@@ -182,7 +193,7 @@ object CartStore {
             message = error.message ?: "Failed to add item"
             return false
         } finally {
-            isBusy = false
+            isSyncing = false
         }
     }
 
@@ -193,14 +204,14 @@ object CartStore {
             return
         }
 
-        isBusy = true
+        isSyncing = true
         try {
             items.forEach { item ->
                 removeBackendItem(item)
             }
             backendCart = null
         } finally {
-            isBusy = false
+            isSyncing = false
         }
     }
 
@@ -209,19 +220,36 @@ object CartStore {
         backendCart = orderRepository.viewCart(buyerId)
     }
 
-    suspend fun updateBackendQuantity(
-        orderLineItemId: Long,
-        quantity: Double
-    ) {
-        isBusy = true
+    suspend fun increaseCartQty(orderLineItemId: Long) {
+        if (isSyncing) return
+
+        isSyncing = true
+
         try {
-            backendCart = orderRepository.updateQuantity(orderLineItemId, quantity)
-            refreshBackendCart()
+            backendCart =
+                orderRepository.updateQuantity(
+                    orderLineItemId,
+                    1.0
+                )
         } finally {
-            isBusy = false
+            isSyncing = false
         }
     }
+    suspend fun decreaseCartQty(orderLineItemId: Long) {
+        if (isSyncing) return
 
+        isSyncing = true
+
+        try {
+            backendCart =
+                orderRepository.reduceQty(
+                    orderLineItemId,
+                    1.0
+                )
+        } finally {
+            isSyncing = false
+        }
+    }
     suspend fun removeBackendItem(item: com.nexora.app.data.model.order.OrderItem) {
         val cart = backendCart ?: return
         val request = OrderRequest(
@@ -237,12 +265,12 @@ object CartStore {
             orderLineItemId = item.orderLineItemId
         )
 
-        isBusy = true
+        isSyncing = true
         try {
             backendCart = orderRepository.removeFromCart(request)
             refreshBackendCart()
         } finally {
-            isBusy = false
+            isSyncing = false
         }
     }
 
@@ -250,7 +278,7 @@ object CartStore {
         val cart = backendCart ?: return null
         val buyerId = activeBuyerId ?: cart.buyerId
 
-        isBusy = true
+        isSyncing = true
         message = null
 
         try {
@@ -304,7 +332,7 @@ object CartStore {
             message = error.message ?: "Failed to place order"
             return null
         } finally {
-            isBusy = false
+            isSyncing = false
         }
     }
 
@@ -374,7 +402,149 @@ object CartStore {
         cartLines.clear()
         return invoice
     }
+
+    /**
+     * Apply discount to an order
+     */
+    suspend fun applyItemDiscount(
+        orderLineItemId: Long,
+        discountType: String,
+        discountValue: Double
+    ): Boolean {
+        isDiscountLoading = true
+        discountMessage = null
+
+        try {
+            val result = discountRepository.applyItemDiscount(
+                orderLineItemId = orderLineItemId,
+                discountType = discountType,
+                discountValue = discountValue
+            )
+
+            if (result.success) {
+                refreshBackendCart()
+                discountMessage = result.message ?: "Discount applied successfully"
+                return true
+            } else {
+                discountMessage = result.message ?: "Failed to apply discount"
+                return false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            discountMessage = e.message ?: "Error applying discount"
+            return false
+        } finally {
+            isDiscountLoading = false
+        }
+    }
+
+    /**
+     * Remove discount from an item
+     */
+    suspend fun removeItemDiscount(orderLineItemId: Long): Boolean {
+        isDiscountLoading = true
+        discountMessage = null
+
+        try {
+            val result = discountRepository.removeItemDiscount(orderLineItemId)
+
+            if (result.success) {
+                refreshBackendCart()
+                discountMessage = result.message ?: "Discount removed successfully"
+                return true
+            } else {
+                discountMessage = result.message ?: "Failed to remove discount"
+                return false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            discountMessage = e.message ?: "Error removing discount"
+            return false
+        } finally {
+            isDiscountLoading = false
+        }
+    }
+
+    /**
+     * Apply discount to an order
+     */
+    suspend fun applyOrderDiscount(
+        discountType: String,
+        discountValue: Double,
+        applyToAllItems: Boolean = false
+    ): Boolean {
+        val cart = backendCart ?: return false
+        isDiscountLoading = true
+        discountMessage = null
+
+        try {
+            val result = discountRepository.applyOrderDiscount(
+                orderId = cart.orderId,
+                discountType = discountType,
+                discountValue = discountValue,
+                applyToAllItems = applyToAllItems
+            )
+
+            if (result.success) {
+                refreshBackendCart()
+                discountMessage = result.message ?: "Order discount applied successfully"
+                return true
+            } else {
+                discountMessage = result.message ?: "Failed to apply order discount"
+                return false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            discountMessage = e.message ?: "Error applying order discount"
+            return false
+        } finally {
+            isDiscountLoading = false
+        }
+    }
+
+    /**
+     * Remove all discounts from an order
+     */
+    suspend fun removeAllOrderDiscounts(): Boolean {
+        val cart = backendCart ?: return false
+        isDiscountLoading = true
+        discountMessage = null
+
+        try {
+            val result = discountRepository.removeAllOrderDiscounts(cart.orderId)
+
+            if (result.success) {
+                refreshBackendCart()
+                discountMessage = result.message ?: "All discounts removed successfully"
+                return true
+            } else {
+                discountMessage = result.message ?: "Failed to remove discounts"
+                return false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            discountMessage = e.message ?: "Error removing discounts"
+            return false
+        } finally {
+            isDiscountLoading = false
+        }
+    }
+
+    /**
+     * Check if order has discounts
+     */
+    fun hasOrderDiscount(): Boolean {
+        return (backendCart?.totalOrderLiDiscAmt ?: 0.0) > 0
+    }
+
+    /**
+     * Get order discount amount
+     */
+    fun getOrderDiscountAmount(): Double {
+        return backendCart?.totalOrderLiDiscAmt ?: 0.0
+    }
 }
+
 
 private fun roundMoney(value: Double): Double {
     return round(value * 100.0) / 100.0

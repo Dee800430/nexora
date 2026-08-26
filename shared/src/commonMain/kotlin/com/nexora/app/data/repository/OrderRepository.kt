@@ -50,6 +50,15 @@ class OrderRepository {
             quantity = quantity
         )
     }
+    suspend fun  reduceQty(
+        orderLineItemId: Long,
+        quantity: Double
+    ): Order {
+        return OrderApi.reduceQty(
+            orderLineItemId = orderLineItemId,
+            quantity = quantity
+        )
+    }
 
     suspend fun getInvoicesByStatus(
         status: String

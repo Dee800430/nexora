@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nexora.app.data.model.user.WalkInCustomerDto
 import com.nexora.app.data.repository.UserRepository
 import com.nexora.app.presentation.cart.CustomerDetails
 import kotlinx.coroutines.launch
@@ -41,6 +42,7 @@ fun CustomerDialog(
     var userId by remember { mutableStateOf<Long?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var isSearching by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     fun clearFoundCustomer() {
         userId = null
@@ -147,6 +149,10 @@ fun CustomerDialog(
             Button(
                 onClick = {
                     when {
+                        isSaving -> {
+                            return@Button
+                        }
+
                         mobile.length != 10 -> {
                             message = "Enter a valid 10 digit mobile number"
                         }
@@ -156,20 +162,55 @@ fun CustomerDialog(
                         }
 
                         else -> {
-                            onSave(
-                                CustomerDetails(
-                                    userId = userId,
-                                    name = name,
-                                    mobile = mobile,
-                                    email = email,
-                                    address = address
-                                )
-                            )
+                            scope.launch {
+                                isSaving = true
+                                message = null
+
+                                try {
+                                    val customer =
+                                        repository
+                                            .createOrUpdateWalkInCustomer(
+                                                WalkInCustomerDto(
+                                                    userName = name,
+                                                    mobile = mobile
+                                                )
+                                            )
+
+                                    onSave(
+                                        CustomerDetails(
+                                            userId =
+                                                customer.userId
+                                                    ?: userId,
+                                            name =
+                                                customer.userName
+                                                    ?: name,
+                                            mobile =
+                                                customer.mobile
+                                                    ?: mobile,
+                                            email = email,
+                                            address = address
+                                        )
+                                    )
+                                } catch (error: Exception) {
+                                    error.printStackTrace()
+                                    message =
+                                        error.message
+                                            ?: "Failed to save customer"
+                                } finally {
+                                    isSaving = false
+                                }
+                            }
                         }
                     }
                 }
             ) {
-                Text("Save & Continue")
+                Text(
+                    if (isSaving) {
+                        "Saving..."
+                    } else {
+                        "Save & Continue"
+                    }
+                )
             }
         },
         dismissButton = {

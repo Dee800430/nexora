@@ -24,9 +24,9 @@ class OrderRepository {
     }
 
     suspend fun viewCart(
-        buyerId: Long
+
     ): Order {
-        return OrderApi.viewCart(buyerId)
+        return OrderApi.viewCart()
     }
 
     suspend fun removeFromCart(

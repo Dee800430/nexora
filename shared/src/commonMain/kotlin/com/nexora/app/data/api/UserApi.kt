@@ -8,8 +8,10 @@ import com.nexora.app.data.model.user.MobileLoginRequest
 import com.nexora.app.data.model.user.Roles
 import com.nexora.app.data.model.user.SendOtpRequest
 import com.nexora.app.data.model.user.TempCustomerRequest
+import com.nexora.app.data.model.user.User
 import com.nexora.app.data.model.user.UserAddress
 import com.nexora.app.data.model.user.UserProfile
+import com.nexora.app.data.model.user.WalkInCustomerDto
 
 object UserApi {
 
@@ -408,6 +410,16 @@ object UserApi {
         )
     }
 
+    suspend fun createOrUpdateWalkInCustomer(
+        body: WalkInCustomerDto
+    ): User {
+        return ApiService.request(
+            service = "user",
+            endpoint = "/user/customer/temp/data",
+            method = "POST",
+           body = body
+        )
+    }
     suspend fun updateTempCustomer(
         userId: Long,
         body: TempCustomerRequest

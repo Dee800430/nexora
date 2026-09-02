@@ -2,6 +2,13 @@ package com.nexora.app.data.model.user
 
 import kotlinx.serialization.Serializable
 
+
+
+@Serializable
+data class WalkInCustomerDto(
+    val userName: String,
+    val mobile: String
+)
 @Serializable
 data class Roles(
     val roleId: Long,

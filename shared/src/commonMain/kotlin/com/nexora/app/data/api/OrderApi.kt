@@ -46,12 +46,12 @@ object OrderApi {
      * Get the current sales cart for a buyer.
      */
     suspend fun viewCart(
-        buyerId: Long
+
     ): Order {
 
         return ApiService.request(
             service = "order",
-            endpoint = "/inv/cart/$buyerId",
+            endpoint = "/inv/cart",
             method = "GET"
         )
     }

@@ -3,7 +3,6 @@ package com.nexora.app.presentation.cart
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nexora.app.data.model.item.ItemDto
 import com.nexora.app.data.model.order.Order
@@ -154,19 +153,14 @@ object CartStore {
         message = null
 
         try {
-            val buyerId = ensureBuyerId()
 
-            val requestOrderId =
-                if (editMode && !isNewUserSession) {
-                    backendCart?.orderId
-                } else {
-                    null
-                }
+
+
 
             val request = OrderRequest(
-                orderId = requestOrderId,
+                orderId = backendCart?.orderId,
 
-                buyerId = buyerId,
+                buyerId = null,
                 sellerId = product.userId ?: 0,
                 itemName = product.itemName,
                 uom = product.uom,
@@ -176,13 +170,13 @@ object CartStore {
                 price = product.saleRate,
                 entityItemLineId = product.entityItemLineId ?: 0,
                 entityItemLineStockId = product.entityItemLineStockId ?: 0,
-                userId = product.userId ?: buyerId,
+                userId = product.userId,
                 siteId = 0
             )
 
             orderRepository.allocateStock(request)
 
-            backendCart = orderRepository.viewCart(buyerId)
+            backendCart = orderRepository.viewCart()
             refreshBackendCart()
 
             message = "Added to cart"
@@ -216,8 +210,7 @@ object CartStore {
     }
 
     suspend fun refreshBackendCart() {
-        val buyerId = activeBuyerId ?: return
-        backendCart = orderRepository.viewCart(buyerId)
+        backendCart = orderRepository.viewCart()
     }
 
     suspend fun increaseCartQty(orderLineItemId: Long) {
@@ -254,7 +247,7 @@ object CartStore {
         val cart = backendCart ?: return
         val request = OrderRequest(
             buyerId = cart.buyerId,
-            sellerId = cart.sellerId,
+            sellerId = cart.sellerId ?: 0,
             itemName = item.itemName.orEmpty(),
             quantity = item.itemQty,
             price = item.salePrice,
@@ -276,49 +269,33 @@ object CartStore {
 
     suspend fun completeBackendOrder(customer: CustomerDetails): Order? {
         val cart = backendCart ?: return null
-        val buyerId = activeBuyerId ?: cart.buyerId
 
         isSyncing = true
         message = null
 
         try {
-            val finalBuyerId: Long
-            val finalOrderId: Long
-            val finalUserName: String
+            val finalBuyerId =
+                customer.userId
+                    ?: activeBuyerId
+                    ?: cart.buyerId
+                    ?: error("Customer did not return userId")
 
-            if (customer.userId != null && customer.userId != buyerId) {
-                val changedInvoice = orderRepository.changeBuyer(
-                    orderId = cart.orderId,
-                    buyerId = customer.userId,
-                    userName = customer.name
-                )
-
-                finalBuyerId = changedInvoice.buyerId ?: customer.userId
-                finalOrderId = changedInvoice.orderId
-                finalUserName = changedInvoice.userName ?: customer.name
-            } else {
-                userRepository.updateTempCustomer(
-                    userId = buyerId,
-                    body = com.nexora.app.data.model.user.TempCustomerRequest(
-                        userName = customer.name,
-                        mobile = customer.mobile
-                    )
-                )
-                finalBuyerId = buyerId
-                finalOrderId = cart.orderId
-                finalUserName = customer.name
-            }
+            val finalUserName =
+                customer.name.ifBlank {
+                    "Walk-in Customer"
+                }
+            
 
             val placed = orderRepository.placeInvoiceOrder(
                 PlaceOrderRequest(
                     buyerId = finalBuyerId,
-                    sourceOrderId = finalOrderId,
+                    sourceOrderId = cart.orderId,
                     userName = finalUserName,
                     comments = customer.address,
                     workflowName = "",
                     isComment = false,
-                    modifiedBy = customer.userId ?: finalBuyerId,
-                    userId = customer.userId ?: finalBuyerId
+                    modifiedBy = finalBuyerId,
+                    userId = finalBuyerId
                 )
             )
 

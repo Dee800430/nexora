@@ -32,8 +32,8 @@ data class Order(
     val itemName: String? = null,
     val orderId: Long = 0,
     val userName: String? = null,
-    val buyerId: Long = 0,
-    val sellerId: Long = 0,
+    val buyerId: Long? = null,
+    val sellerId: Long? = null,
     val subTotalAmt: Double = 0.0,
     val totalAmt: Double? = null,
     val totalOrderLiDiscAmt: Double? = null,
@@ -52,7 +52,7 @@ data class Order(
 @Serializable
 data class OrderRequest(
     val orderId: Long? = null,
-    val buyerId: Long,
+    val buyerId: Long? = null,
     val sellerId: Long,
     val itemName: String,
     val uom: String? = null,
@@ -62,7 +62,7 @@ data class OrderRequest(
     val price: Double,
     val entityItemLineId: Long,
     val entityItemLineStockId: Long,
-    val userId: Long,
+    val userId: Long?,
     val siteId: Long,
     val orderLineItemId: Long? = null
 )

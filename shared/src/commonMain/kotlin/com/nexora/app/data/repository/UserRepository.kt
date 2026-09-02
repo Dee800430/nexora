@@ -8,8 +8,10 @@ import com.nexora.app.data.model.user.MobileLoginRequest
 import com.nexora.app.data.model.user.Roles
 import com.nexora.app.data.model.user.SendOtpRequest
 import com.nexora.app.data.model.user.TempCustomerRequest
+import com.nexora.app.data.model.user.User
 import com.nexora.app.data.model.user.UserAddress
 import com.nexora.app.data.model.user.UserProfile
+import com.nexora.app.data.model.user.WalkInCustomerDto
 
 class UserRepository {
 
@@ -280,6 +282,15 @@ class UserRepository {
             body = body
         )
     }
+    suspend fun createOrUpdateWalkInCustomer(
+        body: WalkInCustomerDto
+    ): User {
+      return UserApi.createOrUpdateWalkInCustomer(
+          body
+      ) 
+    }
+
+
     suspend fun sendOtp(mobile: String): String {
         val request = SendOtpRequest(mobile = mobile)
         return UserApi.sendOtp(request)
